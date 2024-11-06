@@ -7,9 +7,13 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "express": "^4.17.1",
-    "firebase": "^9.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "firebase": "^9.23.0",
+    "jsonwebtoken": "^9.0.2",
+    "my-express-firebase-app": "file:",
     "nodemon": "^3.1.7"
   }
 }
