@@ -1,6 +1,6 @@
 import express from "express";
 import db from "../config/config.js";
-import { ref, get, query, where, doc, getDoc, updateDoc } from "firebase/database";
+import { ref, get, set, push, update } from "firebase/database";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import auth from "../middleware/auth.js";
@@ -18,14 +18,21 @@ router.post("/register", async (req, res) => {
     }
     
     // Cek email yang sudah ada
-    const q = query(ref(db, 'users'), where("email", "==", email));
-    const snapshot = await get(q);
+    const usersRef = ref(db, 'users');
+    const snapshot = await get(usersRef);
+    let emailExists = false;
     
-    if (!snapshot.empty) {
+    snapshot.forEach((childSnapshot) => {
+      const userData = childSnapshot.val();
+      if (userData.email === email && !userData.deleted) {
+        emailExists = true;
+      }
+    });
+    
+    if (emailExists) {
       return res.status(400).json({ message: "Email sudah terdaftar" });
     }
 
-    // Tambahkan log untuk memeriksa proses hashing
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -38,7 +45,7 @@ router.post("/register", async (req, res) => {
       updatedAt: new Date().toISOString()
     };
 
-    const newUserRef = ref(db, 'users');
+    const newUserRef = push(ref(db, 'users'));
     await set(newUserRef, user);
     
     const token = jwt.sign({ id: newUserRef.key }, JWT_SECRET, { expiresIn: "1d" });
@@ -156,9 +163,9 @@ router.post("/change-password", auth, async (req, res) => {
       });
     }
 
-    const userRef = doc(db, "users", req.user.id);
-    const userDoc = await getDoc(userRef);
-    const userData = userDoc.data();
+    const userRef = ref(db, `users/${req.user.id}`);
+    const snapshot = await get(userRef);
+    const userData = snapshot.val();
 
     const isValidPassword = await bcrypt.compare(currentPassword, userData.password);
     if (!isValidPassword) {
@@ -168,7 +175,10 @@ router.post("/change-password", auth, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    await updateDoc(userRef, { password: hashedPassword });
+    await update(userRef, { 
+      password: hashedPassword,
+      updatedAt: new Date().toISOString()
+    });
 
     res.status(200).json({ message: "Password berhasil diubah" });
   } catch (error) {
