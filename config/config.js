@@ -1,10 +1,10 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
+  databaseURL: "https://uts-yasmin-default-rtdb.firebaseio.com/",
   apiKey: "AIzaSyDaMmyi_j3_vpqw5_oGQL-6UYoV11nWR-k",
   authDomain: "wst-test-626d9.firebaseapp.com",
-  databaseURL: "https://wst-test-626d9-default-rtdb.firebaseio.com",
   projectId: "wst-test-626d9",
   storageBucket: "wst-test-626d9.appspot.com",
   messagingSenderId: "821621404841",
@@ -14,6 +14,6 @@ const firebaseConfig = {
 
 // Inisialisasi Firebase
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const db = getDatabase(app);
 
 export default db; // Ekspor db

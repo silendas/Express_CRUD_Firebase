@@ -1,6 +1,6 @@
 import express from "express";
 import db from "../config/config.js";
-import { collection, addDoc, getDocs, doc, updateDoc, query, where } from "firebase/firestore";
+import { ref, push, set, get, update, query, orderByChild, equalTo } from "firebase/database";
 import bcrypt from "bcryptjs";
 import auth from "../middleware/auth.js";
 
@@ -16,10 +16,18 @@ router.post("/", auth, async (req, res) => {
     }
 
     // Cek email yang sudah ada
-    const q = query(collection(db, "users"), where("email", "==", email));
-    const snapshot = await getDocs(q);
+    const usersRef = ref(db, 'users');
+    const snapshot = await get(usersRef);
+    let emailExists = false;
     
-    if (!snapshot.empty) {
+    snapshot.forEach((childSnapshot) => {
+      const userData = childSnapshot.val();
+      if (userData.email === email && !userData.deleted) {
+        emailExists = true;
+      }
+    });
+    
+    if (emailExists) {
       return res.status(400).json({ message: "Email sudah terdaftar" });
     }
 
@@ -36,11 +44,12 @@ router.post("/", auth, async (req, res) => {
       updatedAt: new Date().toISOString()
     };
     
-    const docRef = await addDoc(collection(db, "users"), user);
+    const newUserRef = push(ref(db, 'users'));
+    await set(newUserRef, user);
     
     // Hapus password dari response
     const userResponse = {
-      id: docRef.id,
+      id: newUserRef.key,
       email,
       ...otherData,
       createdAt: user.createdAt,
@@ -60,17 +69,22 @@ router.post("/", auth, async (req, res) => {
 // Read Users (Protected)
 router.get("/", auth, async (req, res) => {
   try {
-    const q = query(collection(db, "users"), where("deleted", "==", false));
-    const snapshot = await getDocs(q);
-    const users = snapshot.docs.map(doc => {
-      const userData = doc.data();
-      // Hapus data sensitif
-      delete userData.password;
-      return { 
-        id: doc.id, 
-        ...userData
-      };
+    const usersRef = ref(db, 'users');
+    const snapshot = await get(usersRef);
+    
+    const users = [];
+    snapshot.forEach((childSnapshot) => {
+      const userData = childSnapshot.val();
+      if (!userData.deleted) {
+        // Hapus data sensitif
+        const { password, ...userWithoutPassword } = userData;
+        users.push({
+          id: childSnapshot.key,
+          ...userWithoutPassword
+        });
+      }
     });
+    
     res.status(200).json({
       message: "Data user berhasil diambil",
       users
@@ -89,14 +103,18 @@ router.put("/:id", auth, async (req, res) => {
     
     // Jika ada update email, cek duplikasi
     if (email) {
-      const q = query(
-        collection(db, "users"), 
-        where("email", "==", email),
-        where("deleted", "==", false)
-      );
-      const snapshot = await getDocs(q);
+      const usersRef = ref(db, 'users');
+      const snapshot = await get(usersRef);
+      let emailExists = false;
       
-      if (!snapshot.empty && snapshot.docs[0].id !== id) {
+      snapshot.forEach((childSnapshot) => {
+        const userData = childSnapshot.val();
+        if (userData.email === email && !userData.deleted && childSnapshot.key !== id) {
+          emailExists = true;
+        }
+      });
+      
+      if (emailExists) {
         return res.status(400).json({ message: "Email sudah digunakan" });
       }
     }
@@ -114,8 +132,8 @@ router.put("/:id", auth, async (req, res) => {
       hashedData.password = hashedPassword;
     }
 
-    const userRef = doc(db, "users", id);
-    await updateDoc(userRef, hashedData);
+    const userRef = ref(db, `users/${id}`);
+    await update(userRef, hashedData);
     
     // Hapus password dari response
     delete hashedData.password;
@@ -134,9 +152,9 @@ router.put("/:id", auth, async (req, res) => {
 router.delete("/:id", auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const userRef = doc(db, "users", id);
+    const userRef = ref(db, `users/${id}`);
     
-    await updateDoc(userRef, { 
+    await update(userRef, { 
       deleted: true,
       updatedAt: new Date().toISOString()
     });

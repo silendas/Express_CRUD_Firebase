@@ -1,6 +1,6 @@
 import express from "express";
 import db from "../config/config.js";
-import { collection, addDoc, getDocs, query, where, doc, getDoc, updateDoc } from "firebase/firestore";
+import { ref, get, query, where, doc, getDoc, updateDoc } from "firebase/database";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import auth from "../middleware/auth.js";
@@ -18,8 +18,8 @@ router.post("/register", async (req, res) => {
     }
     
     // Cek email yang sudah ada
-    const q = query(collection(db, "users"), where("email", "==", email));
-    const snapshot = await getDocs(q);
+    const q = query(ref(db, 'users'), where("email", "==", email));
+    const snapshot = await get(q);
     
     if (!snapshot.empty) {
       return res.status(400).json({ message: "Email sudah terdaftar" });
@@ -38,13 +38,14 @@ router.post("/register", async (req, res) => {
       updatedAt: new Date().toISOString()
     };
 
-    const docRef = await addDoc(collection(db, "users"), user);
+    const newUserRef = ref(db, 'users');
+    await set(newUserRef, user);
     
-    const token = jwt.sign({ id: docRef.id }, JWT_SECRET, { expiresIn: "1d" });
+    const token = jwt.sign({ id: newUserRef.key }, JWT_SECRET, { expiresIn: "1d" });
     
     // Hapus password dari response
     const userResponse = {
-      id: docRef.id,
+      id: newUserRef.key,
       email,
       ...otherData,
       createdAt: user.createdAt,
@@ -67,44 +68,33 @@ router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    console.log("Login attempt for email:", email);
-
     if (!email || !password) {
       return res.status(400).json({ message: "Email dan password harus diisi" });
     }
 
-    const q = query(collection(db, "users"), where("email", "==", email));
-    const snapshot = await getDocs(q);
-
-    console.log("Query result empty?", snapshot.empty);
+    const usersRef = ref(db, 'users');
+    const snapshot = await get(usersRef);
     
-    if (snapshot.empty) {
+    let user = null;
+    snapshot.forEach((childSnapshot) => {
+      const userData = childSnapshot.val();
+      if (userData.email === email && !userData.deleted) {
+        user = { id: childSnapshot.key, ...userData };
+      }
+    });
+
+    if (!user) {
       return res.status(401).json({ message: "Email atau password salah" });
     }
 
-    const userData = snapshot.docs[0];
-    const user = { id: userData.id, ...userData.data() };
-
-    console.log("Found user:", { 
-      id: user.id, 
-      email: user.email,
-      deleted: user.deleted 
-    });
-
-    if (user.deleted) {
-      return res.status(401).json({ message: "Akun tidak ditemukan" });
-    }
-
     const isValidPassword = await bcrypt.compare(password, user.password);
-    console.log("Password valid?", isValidPassword);
-
     if (!isValidPassword) {
       return res.status(401).json({ message: "Email atau password salah" });
     }
 
     const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "1d" });
-
-    // Hapus data sensitif dari response
+    
+    // Hapus data sensitif
     const userResponse = {
       id: user.id,
       email: user.email,
