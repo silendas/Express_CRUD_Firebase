@@ -2,7 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
-  databaseURL: "https://uts-yasmin-default-rtdb.firebaseio.com/",
+  databaseURL: "https://wst-test-626d9-default-rtdb.firebaseio.com/",
   apiKey: "AIzaSyDaMmyi_j3_vpqw5_oGQL-6UYoV11nWR-k",
   authDomain: "wst-test-626d9.firebaseapp.com",
   projectId: "wst-test-626d9",
